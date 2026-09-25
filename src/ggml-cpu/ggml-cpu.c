@@ -2280,7 +2280,13 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_TRI:
         case GGML_OP_FILL:
             {
-                n_tasks = n_threads;
+                // Work-size threshold, in the spirit of the GGML_OP_SOFT_MAX case below (MIN(n_threads,
+                // nrows)). These ops were the only ones unconditionally split across every thread, so a
+                // 17 KB elementwise add paid a two-thread dispatch plus a barrier to move 8.5 KB - measured
+                // on a 2-A78 mask at 56 us/call and ~300 MB/s, while a 29 KB single-threaded SCALE on the
+                // same tensors ran at 4.4 us and 6.7 GB/s. Partitioning the rows changes which core does
+                // which row and nothing else: same elements, same order, bit-identical output.
+                n_tasks = ggml_nelements(node) >= 32768 ? n_threads : 1;
             } break;
         case GGML_OP_SUB:
         case GGML_OP_SQR:
