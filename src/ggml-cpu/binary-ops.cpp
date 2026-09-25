@@ -39,10 +39,13 @@ static inline void vec_binary_op_non_contiguous(const int64_t n, const int64_t n
     constexpr auto src1_to_f32 = type_conversion_table<src1_t>::to_f32;
     constexpr auto f32_to_dst  = type_conversion_table<dst_t >::from_f32;
 
+    // Counter instead of i % ne10: the modulo is an integer division per element, and on a phone-sized
+    // elementwise op that division costs more than the add. Same elements, same order, same result.
+    int64_t i10 = 0;
     for (int i = 0; i < n; i++) {
-        int i10 = i % ne10;
         const src1_t * y_ptr = (const src1_t *)((const char *)y + i10*nb10);
         z[i] = f32_to_dst(op(src0_to_f32(x[i]), src1_to_f32(*y_ptr)));
+        if (++i10 == ne10) i10 = 0;
     }
 }
 
@@ -93,7 +96,6 @@ static void apply_binary_op(const ggml_compute_params * params, ggml_tensor * ds
         if (is_src1_contiguous_rows) {
             // src1 is broadcastable across src0 and dst in i1, i2, i3
             const int64_t nr0 = ne00 / ne10;
-
             for (int64_t r = 0; r < nr0; ++r) {
 #ifdef GGML_USE_ACCELERATE
                 if constexpr (std::is_same_v<src0_t, float> && std::is_same_v<src1_t, float> && std::is_same_v<dst_t, float>) {
