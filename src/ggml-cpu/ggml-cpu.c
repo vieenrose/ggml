@@ -49,6 +49,22 @@
 
 #ifdef GGML_USE_LLAMAFILE
 #include "llamafile/sgemm.h"
+
+// Diagnostic: activation elements quantised by mul_mat. Every mul_mat converts its F32 src1 to the vec_dot
+// type - Q8_0 for every quantised weight type - and a transformer block feeds the SAME activation tensor to
+// three or four matmuls, so the same elements are converted repeatedly. Whether memoising that conversion is
+// worth building depends entirely on the volume, so it is counted rather than guessed. Off unless
+// GGML_COUNT_QUANT is set; even then it is one relaxed atomic per matmul, and only from thread 0.
+uint64_t g_ggml_quant_elems = 0;
+
+static int g_ggml_count_quant = -1;
+
+static inline int ggml_count_quant_enabled(void) {
+    if (g_ggml_count_quant < 0) {
+        g_ggml_count_quant = getenv("GGML_COUNT_QUANT") != NULL;
+    }
+    return g_ggml_count_quant;
+}
 #endif
 
 #ifdef GGML_USE_CPU_RISCV64_SPACEMIT
