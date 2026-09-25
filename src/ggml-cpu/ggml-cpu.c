@@ -2403,7 +2403,17 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_MUL_MAT_ID:
         case GGML_OP_OUT_PROD:
             {
-                n_tasks = n_threads;
+                // Splitting a matmul across threads only pays when there are enough columns to divide. The
+                // x-asr encoder runs its GEMMs at 3-24 columns (a 24-frame chunk after [1,2,4,8,4,2] time
+                // downsampling), and it issues ~65k of them per 69 s clip - so each call was paying a
+                // two-thread dispatch and a barrier to hand one or two columns to the second core. Measured
+                // on the phone, the ASR-only run averages 0.98 cores on a 2-cpu mask, which is what that looks
+                // like. Below the threshold the rows stay on one thread. Which core runs a row, and in what
+                // order, is unchanged, so this is bit-identical - and the same work-size idea already applied
+                // to the copy/elementwise group, where it measured 0% because those ops sit beside the matmuls
+                // rather than on the critical path.
+                const int64_t cols = node->ne[1];
+                n_tasks = cols >= 16 ? n_threads : 1;
             } break;
         case GGML_OP_GET_ROWS:
         case GGML_OP_SET_ROWS:
