@@ -1350,6 +1350,11 @@ UseGgmlGemm1:;
             }
         }
     #else
+        // Counted once per call (ith == 0): the loop below is sliced across threads by ne10 blocks, so
+        // counting per thread would multiply the volume by the thread count and make it a fiction.
+        if (ggml_count_quant_enabled() && ith == 0) {
+            g_ggml_quant_elems += (uint64_t) ne10 * (uint64_t) ne11 * (uint64_t) ne12 * (uint64_t) ne13;
+        }
         for (int64_t i13 = 0; i13 < ne13; ++i13) {
             for (int64_t i12 = 0; i12 < ne12; ++i12) {
                 for (int64_t i11 = 0; i11 < ne11; ++i11) {
